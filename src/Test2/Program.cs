@@ -1,4 +1,5 @@
 ﻿using Amazon.CDK;
+using CdkLambdaTest;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +11,7 @@ namespace Test2
         public static void Main(string[] args)
         {
             var app = new App();
-            new Test2Stack(app, "Test2Stack", new StackProps
+            new CdkLambdaTest2Stack(app, "CdkLambdaTest2Stack", new StackProps
             {
                 // If you don't specify 'env', this stack will be environment-agnostic.
                 // Account/Region-dependent features and context lookups will not work,

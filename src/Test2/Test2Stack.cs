@@ -1,13 +1,24 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.Lambda;
 using Constructs;
 
-namespace Test2
+namespace CdkLambdaTest
 {
-    public class Test2Stack : Stack
+    public class CdkLambdaTest2Stack : Stack
     {
-        internal Test2Stack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
+        internal CdkLambdaTest2Stack(Construct scope, string id, IStackProps? props = null)
+            : base(scope, id, props)
         {
-            // The code that defines your stack goes here
+            var lambdaPath = "src/publish";
+
+            var lambdaFunction = new Function(this, "Test2Lambda", new FunctionProps
+            {
+                Runtime = Runtime.DOTNET_8,
+                Handler = "LambdaFunction::LambdaFunction.Function::FunctionHandler",
+                Code = Code.FromAsset(lambdaPath),
+                Timeout = Duration.Seconds(10),
+                MemorySize = 256
+            });
         }
     }
 }
