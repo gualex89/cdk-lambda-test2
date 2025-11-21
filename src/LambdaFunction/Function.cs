@@ -12,28 +12,25 @@ namespace LambdaFunction;
 
 public class Function
 {
-    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest input, ILambdaContext context)
+    public async Task<APIGatewayProxyResponse> FunctionHandler(APIGatewayProxyRequest request, ILambdaContext context)
     {
         try
         {
-            // 1. Nombre del secreto
+            // 0. Leer JSON del body (POST)
+            var input = JsonSerializer.Deserialize<Dictionary<string, object>>(request.Body!);
+
+            int tipoSolicitud = int.Parse(input["tipo_solicitud"].ToString()!);
+            int prioridad = int.Parse(input["prioridad"].ToString()!);
+
+            // 1. Secreto
             string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
             string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
 
-            // 2. Cliente secrets manager
-            var client = new AmazonSecretsManagerClient(
-                Amazon.RegionEndpoint.GetBySystemName(region)
-            );
+            var client = new AmazonSecretsManagerClient(Amazon.RegionEndpoint.GetBySystemName(region));
+            var secretResponse = await client.GetSecretValueAsync(new GetSecretValueRequest { SecretId = secretName });
 
-            // 3. Obtener el secreto
-            var response = await client.GetSecretValueAsync(new GetSecretValueRequest
-            {
-                SecretId = secretName
-            });
+            var secretDict = JsonSerializer.Deserialize<Dictionary<string, object>>(secretResponse.SecretString!)!;
 
-            var secretDict = JsonSerializer.Deserialize<Dictionary<string, object>>(response.SecretString!)!;
-
-            // 4. Connection string
             string connectionString =
                 $"Host={secretDict["host"]};" +
                 $"Port={secretDict["port"]};" +
@@ -41,14 +38,23 @@ public class Function
                 $"Password={secretDict["password"]};" +
                 $"Database={secretDict["dbname"]};";
 
-            // 5. Ejecutar query
+            // 2. Ejecutar query en base al body
             var resultados = new List<Dictionary<string, object?>>();
 
             await using (var conn = new NpgsqlConnection(connectionString))
             {
                 await conn.OpenAsync();
 
-                var cmd = new NpgsqlCommand("SELECT * FROM clientes_compras LIMIT 5", conn);
+                var cmd = new NpgsqlCommand(
+                    @"SELECT * 
+                      FROM solicitudes 
+                      WHERE tipo_solicitud = @tipo 
+                        AND prioridad = @prio
+                      LIMIT 50;", conn);
+
+                cmd.Parameters.AddWithValue("tipo", tipoSolicitud);
+                cmd.Parameters.AddWithValue("prio", prioridad);
+
                 var reader = await cmd.ExecuteReaderAsync();
 
                 while (await reader.ReadAsync())
@@ -57,9 +63,7 @@ public class Function
 
                     for (int i = 0; i < reader.FieldCount; i++)
                     {
-                        string col = reader.GetName(i);
-                        object? val = reader.IsDBNull(i) ? null : reader.GetValue(i);
-                        row[col] = val;
+                        row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
                     }
 
                     resultados.Add(row);
@@ -68,7 +72,6 @@ public class Function
 
             string jsonOut = JsonSerializer.Serialize(resultados);
 
-            // 6. RESPUESTA VÁLIDA PARA API GATEWAY
             return new APIGatewayProxyResponse
             {
                 StatusCode = 200,
