@@ -11,6 +11,6 @@ public class Function
     public string FunctionHandler(JsonElement input, ILambdaContext context)
     {
         string json = input.GetRawText();
-        return $"Hola Briggithe desde test2! Recibí JSON: {json}";
+        return $"Hola Gustavo desde test2! Recibí JSON: {json}";
     }
 }
