@@ -40,10 +40,10 @@ namespace CdkLambdaTest
                 Handler = lambdaFunction,
                 Proxy = false
             });
-            var clientes = api.Root.AddResource("clientes");
+            var clientes = api.Root.AddResource("solicitudes");
 
             // Método GET
-            clientes.AddMethod("GET");
+            clientes.AddMethod("POST");
 
             // 3. Permitir que la Lambda LEA el secreto
             secret.GrantRead(lambdaFunction);
