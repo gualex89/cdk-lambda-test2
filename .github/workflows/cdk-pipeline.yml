@@ -1,0 +1,88 @@
+name: CDK Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+
+  # ---------------------------
+  # 1) VALIDACIÓN DEL PULL REQUEST
+  # ---------------------------
+  pr-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Build Lambda
+        run: |
+          cd src/LambdaFunction
+          dotnet publish -c Release -o ../publish
+
+      - name: Build CDK
+        run: |
+          cd src/Test2
+          dotnet build
+
+
+  # ---------------------------
+  # 2) DEPLOY DESPUÉS DEL MERGE
+  # ---------------------------
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Build Lambda
+        run: |
+          cd src/LambdaFunction
+          dotnet publish -c Release -o ../publish
+
+      - name: Build CDK
+        run: |
+          cd src/Test2
+          dotnet build
+
+      - name: CDK Deploy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-2
+        run: |
+          cdk deploy --require-approval=never
