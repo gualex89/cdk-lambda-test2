@@ -16,13 +16,18 @@ public class Function
     {
         try
         {
-            // 0. Leer JSON del body (POST)
+            // 0. Leer JSON del body
             var input = JsonSerializer.Deserialize<Dictionary<string, object>>(request.Body!);
 
             int tipoSolicitud = int.Parse(input["tipo_solicitud"].ToString()!);
             int prioridad = int.Parse(input["prioridad"].ToString()!);
 
-            // 1. Secreto
+            // estado es opcional
+            string? estado = input.ContainsKey("estado")
+                ? input["estado"]?.ToString()
+                : null;
+
+            // 1. Obtener secretos
             string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
             string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
 
@@ -38,22 +43,37 @@ public class Function
                 $"Password={secretDict["password"]};" +
                 $"Database={secretDict["dbname"]};";
 
-            // 2. Ejecutar query en base al body
+            // 2. Crear query dinámica
             var resultados = new List<Dictionary<string, object?>>();
 
             await using (var conn = new NpgsqlConnection(connectionString))
             {
                 await conn.OpenAsync();
 
-                var cmd = new NpgsqlCommand(
-                    @"SELECT * 
-                      FROM solicitudes 
-                      WHERE tipo_solicitud = @tipo 
-                        AND prioridad = @prio
-                      LIMIT 50;", conn);
+                // Query base
+                string sql = @"
+                    SELECT * 
+                    FROM solicitudes 
+                    WHERE tipo_solicitud = @tipo 
+                      AND prioridad = @prio";
+
+                // Agregar estado si viene
+                if (!string.IsNullOrEmpty(estado))
+                {
+                    sql += " AND estado = @estado";
+                }
+
+                sql += " LIMIT 50;";
+
+                var cmd = new NpgsqlCommand(sql, conn);
 
                 cmd.Parameters.AddWithValue("tipo", tipoSolicitud);
                 cmd.Parameters.AddWithValue("prio", prioridad);
+
+                if (!string.IsNullOrEmpty(estado))
+                {
+                    cmd.Parameters.AddWithValue("estado", estado);
+                }
 
                 var reader = await cmd.ExecuteReaderAsync();
 
@@ -63,7 +83,9 @@ public class Function
 
                     for (int i = 0; i < reader.FieldCount; i++)
                     {
-                        row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                        row[reader.GetName(i)] = reader.IsDBNull(i)
+                            ? null
+                            : reader.GetValue(i);
                     }
 
                     resultados.Add(row);
