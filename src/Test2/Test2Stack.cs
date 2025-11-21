@@ -3,6 +3,8 @@ using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.SecretsManager;  // <-- importante
 using Constructs;
 using System.Collections.Generic;
+using Amazon.CDK.AWS.APIGateway;
+
 
 namespace CdkLambdaTest
 {
@@ -30,9 +32,19 @@ namespace CdkLambdaTest
                 MemorySize = 256,
                 Environment = new Dictionary<string, string>
                 {
-                    { "SECRET_NAME", "test2/rds-credentials" }
+                    { "SECRET_NAME", "test2/rds-credentials" },
+                    { "AWS_REGION", this.Region }
                 }
             });
+            var api = new LambdaRestApi(this, "Test2Api", new LambdaRestApiProps
+            {
+                Handler = lambdaFunction,
+                Proxy = false
+            });
+            var clientes = api.Root.AddResource("clientes");
+
+            // Método GET
+            clientes.AddMethod("GET");
 
             // 3. Permitir que la Lambda LEA el secreto
             secret.GrantRead(lambdaFunction);
