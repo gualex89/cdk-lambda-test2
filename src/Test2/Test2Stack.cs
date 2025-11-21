@@ -32,8 +32,7 @@ namespace CdkLambdaTest
                 MemorySize = 256,
                 Environment = new Dictionary<string, string>
                 {
-                    { "SECRET_NAME", "test2/rds-credentials" },
-                    { "AWS_REGION", this.Region }
+                    { "SECRET_NAME", "test2/rds-credentials" }
                 }
             });
             var api = new LambdaRestApi(this, "Test2Api", new LambdaRestApiProps
