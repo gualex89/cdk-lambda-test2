@@ -20,7 +20,7 @@ namespace CdkLambdaTest
                 "test2/rds-credentials" // <-- el nombre EXACTO del secreto
             );
 
-            // 2. Crear la Lambda e inyectar el nombre del secreto como variable de ambiente
+            // 2. Crear la Lambda e inyectar els nombre del secreto como variable de ambiente
             var lambdaFunction = new Function(this, "Test2Lambda", new FunctionProps
             {
                 Runtime = Runtime.DOTNET_8,
