@@ -6,11 +6,11 @@ using System.Collections.Generic;
 using Amazon.CDK.AWS.APIGateway;
 
 
-namespace CdkLambdaTest
+namespace NuevoApiProyecto
 {
-    public class CdkLambdaTest2Stack : Stack
+    public class NuevoApiStack : Stack
     {
-        internal CdkLambdaTest2Stack(Construct scope, string id, IStackProps? props = null)
+        internal NuevoApiStack(Construct scope, string id, IStackProps? props = null)
             : base(scope, id, props)
         {
             var lambdaPath = "src/publish";
@@ -40,9 +40,9 @@ namespace CdkLambdaTest
                 Handler = lambdaFunction,
                 Proxy = false
             });
-            var clientes = api.Root.AddResource("solicitudes");
+            var clientes = api.Root.AddResource("solicitudes-plantilla");
 
-            // Método GET
+            // Método POST
             clientes.AddMethod("POST");
 
             // 3. Permitir que la Lambda LEA el secreto
