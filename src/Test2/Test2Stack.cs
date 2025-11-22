@@ -23,7 +23,7 @@ namespace NuevoApiProyecto
             );
 
             // 2. Crear la Lambda e inyectar els nombre del secreto como variable de ambiente
-            var lambdaFunction = new Function(this, "Test2Lambda", new FunctionProps
+            var lambdaFunction = new Function(this, "LambdaSolicitudes2989", new FunctionProps
             {
                 Runtime = Runtime.DOTNET_8,
                 Handler = "LambdaFunction::LambdaFunction.Function::FunctionHandler",
@@ -35,12 +35,12 @@ namespace NuevoApiProyecto
                     { "SECRET_NAME", "test2/rds-credentials" }
                 }
             });
-            var api = new LambdaRestApi(this, "Test2Api", new LambdaRestApiProps
+            var api = new LambdaRestApi(this, "newapi", new LambdaRestApiProps
             {
                 Handler = lambdaFunction,
                 Proxy = false
             });
-            var clientes = api.Root.AddResource("solicitudes-plantilla");
+            var clientes = api.Root.AddResource("solicitudes-plantilla-nueva");
 
             // Método POST
             clientes.AddMethod("POST");
