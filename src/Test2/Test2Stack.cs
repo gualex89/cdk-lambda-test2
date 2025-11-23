@@ -8,9 +8,9 @@ using Amazon.CDK.AWS.APIGateway;
 
 namespace NuevoApiProyecto
 {
-    public class NuevoApiStack : Stack
+    public class apiStackDistinto : Stack
     {
-        internal NuevoApiStack(Construct scope, string id, IStackProps? props = null)
+        internal apiStackDistinto(Construct scope, string id, IStackProps? props = null)
             : base(scope, id, props)
         {
             var lambdaPath = "src/publish";
