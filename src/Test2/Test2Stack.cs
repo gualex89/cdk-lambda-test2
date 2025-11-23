@@ -28,6 +28,7 @@ namespace NuevoApiProyecto
                 Runtime = Runtime.DOTNET_8,
                 Handler = "LambdaFunction::LambdaFunction.ReadFunction::FunctionHandler",
                 Code = Code.FromAsset(lambdaPath),
+                Timeout = Duration.Seconds(30),
                 Environment = new Dictionary<string, string>
                 {
                     { "SECRET_NAME", "test2/rds-credentials" }
@@ -40,6 +41,7 @@ namespace NuevoApiProyecto
                 Runtime = Runtime.DOTNET_8,
                 Handler = "LambdaFunction::LambdaFunction.WriteFunction::FunctionHandler",
                 Code = Code.FromAsset(lambdaPath),
+                Timeout = Duration.Seconds(30),
                 Environment = new Dictionary<string, string>
                 {
                     { "SECRET_NAME", "test2/rds-credentials" }
@@ -60,12 +62,8 @@ namespace NuevoApiProyecto
             var writeTask = new LambdaInvoke(this, "WriteToDB", new LambdaInvokeProps
             {
                 LambdaFunction = writeLambda,
-                Payload = TaskInput.FromObject(new Dictionary<string, object?>
-                {
-                    {
-                        "items", JsonPath.StringAt("$.items")
-                    }
-                })
+                Payload = TaskInput.FromJsonPathAt("$.items")
+
 
             });
 
