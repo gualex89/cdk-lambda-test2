@@ -62,12 +62,15 @@ namespace NuevoApiProyecto
             var writeTask = new LambdaInvoke(this, "WriteToDB", new LambdaInvokeProps
             {
                 LambdaFunction = writeLambda,
-                Payload = TaskInput.FromJsonPathAt("$.items")
-
-
+                Payload = TaskInput.FromObject(new Dictionary<string, object?>
+                {
+                    { "items", JsonPath.StringAt("$.items") }
+                })
             });
 
-            
+
+
+
             // 6) STATE MACHINE
             var stateMachine = new StateMachine(this, "DbCopyStateMachine", new StateMachineProps
             {
