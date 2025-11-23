@@ -9,10 +9,12 @@ namespace LambdaFunction;
 
 public class WriteFunction
 {
-    public async Task<object> FunctionHandler(object input, ILambdaContext context)
+    public async Task<object> FunctionHandler(Dictionary<string, object> input, ILambdaContext context)
     {
-        var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(input.ToString()!)!;
-        var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(payload["items"].ToString()!)!;
+        // input YA ES JSON PARSEADO
+        var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(
+            input["items"].ToString()!
+        )!;
 
         string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
         string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
@@ -38,17 +40,15 @@ public class WriteFunction
                 var cmd = new NpgsqlCommand(
                     "INSERT INTO solicitudes_2(nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion, monto_solicitado, observaciones) VALUES (@c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9)", conn);
 
-                cmd.Parameters.AddWithValue("c1", row["nombre_solicitante"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["tipo_solicitud"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["descripcion"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["estado"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["prioridad"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["fecha_creacion"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["fecha_materializacion"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["monto_solicitado"].ToString());
-                cmd.Parameters.AddWithValue("c2", row["observaciones"].ToString());
-                
-
+                cmd.Parameters.AddWithValue("c1", row["nombre_solicitante"]);
+                cmd.Parameters.AddWithValue("c2", row["tipo_solicitud"]);
+                cmd.Parameters.AddWithValue("c3", row["descripcion"]);
+                cmd.Parameters.AddWithValue("c4", row["estado"]);
+                cmd.Parameters.AddWithValue("c5", row["prioridad"]);
+                cmd.Parameters.AddWithValue("c6", row["fecha_creacion"]);
+                cmd.Parameters.AddWithValue("c7", row["fecha_materializacion"]);
+                cmd.Parameters.AddWithValue("c8", row["monto_solicitado"]);
+                cmd.Parameters.AddWithValue("c9", row["observaciones"]);
 
                 await cmd.ExecuteNonQueryAsync();
             }
