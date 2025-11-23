@@ -14,10 +14,9 @@ public class WriteFunction
         // 1. Parseo correcto del input
         //
         var json = input.ToString()!;
-        var root = JsonSerializer.Deserialize<Dictionary<string, object>>(json)!;
+        var root = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)!;
 
-        var itemsJson = root["items"].ToString()!;
-        var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(itemsJson)!;
+        var items = root["items"].Deserialize<List<Dictionary<string, JsonElement>>>()!;
 
         //
         // 2. Secrets Manager
@@ -31,7 +30,7 @@ public class WriteFunction
             SecretId = secretName
         });
 
-        var secretDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+        var secretDict = JsonSerializer.Deserialize<Dictionary<string, string>>(
             secretResponse.SecretString!)!;
 
         string connectionString =
@@ -66,26 +65,15 @@ public class WriteFunction
                     @c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9
                 )", conn);
 
-                // STRING
-                cmd.Parameters.AddWithValue("c1", row["nombre_solicitante"]?.ToString() ?? "");
-
-                // INT
-                cmd.Parameters.AddWithValue("c2", Convert.ToInt32(row["tipo_solicitud"]));
-                cmd.Parameters.AddWithValue("c5", Convert.ToInt32(row["prioridad"]));
-
-                // STRING
-                cmd.Parameters.AddWithValue("c3", row["descripcion"]?.ToString() ?? "");
-                cmd.Parameters.AddWithValue("c4", row["estado"]?.ToString() ?? "");
-
-                // DATE
-                cmd.Parameters.AddWithValue("c6", DateTime.Parse(row["fecha_creacion"]!.ToString()!));
-                cmd.Parameters.AddWithValue("c7", DateTime.Parse(row["fecha_materializacion"]!.ToString()!));
-
-                // NUMERIC
-                cmd.Parameters.AddWithValue("c8", Convert.ToDecimal(row["monto_solicitado"]));
-
-                // STRING
-                cmd.Parameters.AddWithValue("c9", row["observaciones"]?.ToString() ?? "");
+                cmd.Parameters.AddWithValue("c1", GetString(row["nombre_solicitante"]));
+                cmd.Parameters.AddWithValue("c2", GetInt(row["tipo_solicitud"]));
+                cmd.Parameters.AddWithValue("c3", GetString(row["descripcion"]));
+                cmd.Parameters.AddWithValue("c4", GetString(row["estado"]));
+                cmd.Parameters.AddWithValue("c5", GetInt(row["prioridad"]));
+                cmd.Parameters.AddWithValue("c6", GetDate(row["fecha_creacion"]));
+                cmd.Parameters.AddWithValue("c7", GetDate(row["fecha_materializacion"]));
+                cmd.Parameters.AddWithValue("c8", GetDecimal(row["monto_solicitado"]));
+                cmd.Parameters.AddWithValue("c9", GetString(row["observaciones"]));
 
                 await cmd.ExecuteNonQueryAsync();
             }
@@ -93,4 +81,20 @@ public class WriteFunction
 
         return new { status = "ok" };
     }
+
+    // ---------------------------
+    // HELPERS para JsonElement
+    // ---------------------------
+
+    private string GetString(JsonElement el)
+        => el.ValueKind == JsonValueKind.Null ? "" : el.GetString() ?? "";
+
+    private int GetInt(JsonElement el)
+        => el.ValueKind == JsonValueKind.Number ? el.GetInt32() : int.Parse(el.GetString()!);
+
+    private decimal GetDecimal(JsonElement el)
+        => el.ValueKind == JsonValueKind.Number ? el.GetDecimal() : decimal.Parse(el.GetString()!);
+
+    private DateTime GetDate(JsonElement el)
+        => DateTime.Parse(el.GetString()!);
 }
