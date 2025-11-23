@@ -9,7 +9,9 @@ namespace LambdaFunction;
 public class WriteFunction
 {
     public async Task<object> FunctionHandler(Dictionary<string, object> input, ILambdaContext context)
+
     {
+        context.Logger.Log("INPUT RAW: " + JsonSerializer.Serialize(input));
         // 1. Extraer items correctamente del input
         var jsonItems = (JsonElement)input["items"];
         var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonItems.GetRawText())!;
