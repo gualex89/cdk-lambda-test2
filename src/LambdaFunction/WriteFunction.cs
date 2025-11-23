@@ -1,112 +1,94 @@
 ﻿using Amazon.Lambda.Core;
+using Amazon.SecretsManager;
+using Amazon.SecretsManager.Model;
 using Npgsql;
-using System;
 using System.Text.Json;
-
-// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-
 
 namespace LambdaFunction
 {
     public class WriteFunction
     {
-        private readonly string _connectionString =
-            Environment.GetEnvironmentVariable("DB_CONNECTION") ??
-            throw new Exception("DB_CONNECTION not configured");
-
-        public object FunctionHandler(JsonElement input, ILambdaContext context)
+        public async Task<object> FunctionHandler(object input, ILambdaContext context)
         {
             try
             {
-                // Extraer valores de forma segura
-                string nombreSolicitante = ExtractString(input, "nombre_solicitante");
-                int tipoSolicitud = ExtractInt(input, "tipo_solicitud");
-                string descripcion = ExtractString(input, "descripcion");
-                string estado = ExtractString(input, "estado");
-                int prioridad = ExtractInt(input, "prioridad");
-                DateTime fechaCreacion = ExtractDate(input, "fecha_creacion");
-                DateTime fechaMaterializacion = ExtractDate(input, "fecha_materializacion");
+                context.Logger.LogInformation("WriteFunction invoked.");
 
-                using (var conn = new NpgsqlConnection(_connectionString))
+                // 1. Convertir input dinámico (JsonElement) a un diccionario
+                var jsonInput = JsonSerializer.Serialize(input);
+                var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonInput);
+
+                int id = data["id"].GetInt32();
+                string nombre = data["nombre_solicitante"].GetString();
+                int tipoSolicitud = data["tipo_solicitud"].GetInt32();
+                string descripcion = data["descripcion"].GetString();
+                string estado = data["estado"].GetString();
+                int prioridad = data["prioridad"].GetInt32();
+                DateTime fechaCreacion = data["fecha_creacion"].GetDateTime();
+                DateTime fechaMaterializacion = data["fecha_materializacion"].GetDateTime();
+
+                // 2. Obtener secreto desde Secrets Manager
+                string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
+                string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
+
+                var client = new AmazonSecretsManagerClient(Amazon.RegionEndpoint.GetBySystemName(region));
+
+                var secretResponse = await client.GetSecretValueAsync(new GetSecretValueRequest
                 {
-                    conn.Open();
+                    SecretId = secretName
+                });
 
-                    string sql = @"
-                        INSERT INTO solicitudes.solicitud
-                        (nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion)
-                        VALUES (@nombre, @tipo, @descripcion, @estado, @prioridad, @creacion, @materializacion)
-                        RETURNING id;
-                    ";
+                var secretDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(secretResponse.SecretString!)!;
 
-                    using (var cmd = new NpgsqlCommand(sql, conn))
-                    {
-                        cmd.Parameters.AddWithValue("@nombre", nombreSolicitante);
-                        cmd.Parameters.AddWithValue("@tipo", tipoSolicitud);
-                        cmd.Parameters.AddWithValue("@descripcion", descripcion);
-                        cmd.Parameters.AddWithValue("@estado", estado);
-                        cmd.Parameters.AddWithValue("@prioridad", prioridad);
-                        cmd.Parameters.AddWithValue("@creacion", fechaCreacion);
-                        cmd.Parameters.AddWithValue("@materializacion", fechaMaterializacion);
+                // 3. Construir connectionString desde el secreto
+                string connectionString =
+                    $"Host={secretDict["host"]};" +
+                    $"Port={secretDict["port"]};" +
+                    $"Username={secretDict["username"]};" +
+                    $"Password={secretDict["password"]};" +
+                    $"Database={secretDict["dbname"]};";
 
-                        int id = Convert.ToInt32(cmd.ExecuteScalar());
+                context.Logger.LogInformation("Connection string built successfully.");
 
-                        return new { success = true, id };
-                    }
-                }
+                // 4. Insertar en PostgreSQL
+                using var conn = new NpgsqlConnection(connectionString);
+                await conn.OpenAsync();
+
+                string query = @"
+                    INSERT INTO solicitudes.solicitud 
+                    (id, nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion)
+                    VALUES (@id, @nombre, @tipo, @descripcion, @estado, @prioridad, @creacion, @materializacion);
+                ";
+
+                using var cmd = new NpgsqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.Parameters.AddWithValue("@nombre", nombre);
+                cmd.Parameters.AddWithValue("@tipo", tipoSolicitud);
+                cmd.Parameters.AddWithValue("@descripcion", descripcion);
+                cmd.Parameters.AddWithValue("@estado", estado);
+                cmd.Parameters.AddWithValue("@prioridad", prioridad);
+                cmd.Parameters.AddWithValue("@creacion", fechaCreacion);
+                cmd.Parameters.AddWithValue("@materializacion", fechaMaterializacion);
+
+                int rows = await cmd.ExecuteNonQueryAsync();
+
+                context.Logger.LogInformation($"Rows inserted: {rows}");
+
+                return new
+                {
+                    ok = true,
+                    inserted = rows
+                };
             }
             catch (Exception ex)
             {
-                context.Logger.LogError($"ERROR Write Lambda: {ex}");
+                context.Logger.LogError($"Error: {ex}");
                 return new
                 {
-                    success = false,
-                    error = ex.Message,
-                    stackTrace = ex.StackTrace
+                    ok = false,
+                    error = ex.Message
                 };
             }
-        }
-
-        // ----------------------
-        // MÉTODOS UTILITARIOS
-        // ----------------------
-
-        private string ExtractString(JsonElement input, string prop)
-        {
-            if (!input.TryGetProperty(prop, out JsonElement el))
-                throw new Exception($"Falta el campo requerido: {prop}");
-
-            return el.ValueKind switch
-            {
-                JsonValueKind.String => el.GetString(),
-                _ => throw new Exception($"El campo '{prop}' debe ser string")
-            };
-        }
-
-        private int ExtractInt(JsonElement input, string prop)
-        {
-            if (!input.TryGetProperty(prop, out JsonElement el))
-                throw new Exception($"Falta el campo requerido: {prop}");
-
-            return el.ValueKind switch
-            {
-                JsonValueKind.Number => el.GetInt32(),
-                JsonValueKind.String when int.TryParse(el.GetString(), out int v) => v,
-                _ => throw new Exception($"El campo '{prop}' debe ser número (int)")
-            };
-        }
-
-        private DateTime ExtractDate(JsonElement input, string prop)
-        {
-            if (!input.TryGetProperty(prop, out JsonElement el))
-                throw new Exception($"Falta el campo requerido: {prop}");
-
-            if (el.ValueKind == JsonValueKind.String &&
-                DateTime.TryParse(el.GetString(), out DateTime dt))
-            {
-                return dt;
-            }
-
-            throw new Exception($"El campo '{prop}' debe ser una fecha válida");
         }
     }
 }
