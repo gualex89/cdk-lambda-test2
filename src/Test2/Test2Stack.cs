@@ -1,52 +1,83 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.Lambda;
-using Amazon.CDK.AWS.SecretsManager;  // <-- importante
+using Amazon.CDK.AWS.SecretsManager;
 using Constructs;
 using System.Collections.Generic;
-using Amazon.CDK.AWS.APIGateway;
-
+using Amazon.CDK.AWS.StepFunctions;
+using Amazon.CDK.AWS.StepFunctions.Tasks;
 
 namespace NuevoApiProyecto
 {
-    public class apiStackDistinto : Stack
+    public class lambdaConStepF : Stack
     {
-        internal apiStackDistinto(Construct scope, string id, IStackProps? props = null)
+        internal lambdaConStepF(Construct scope, string id, IStackProps? props = null)
             : base(scope, id, props)
         {
             var lambdaPath = "src/publish";
 
-            // 1. Referenciar el secreto creado manualmente en Secrets Manager
+            // 1) SECRET
             var secret = Secret.FromSecretNameV2(
                 this,
                 "RdsSecretReference",
-                "test2/rds-credentials" // <-- el nombre EXACTO del secreto
+                "test2/rds-credentials"
             );
 
-            // 2. Crear la Lambda e inyectar els nombre del secreto como variable de ambiente
-            var lambdaFunction = new Function(this, "LambdaSolicitudes2989", new FunctionProps
+            // 2) LAMBDA QUE LEE
+            var readLambda = new Function(this, "ReadTableLambda", new FunctionProps
             {
                 Runtime = Runtime.DOTNET_8,
-                Handler = "LambdaFunction::LambdaFunction.Function::FunctionHandler",
+                Handler = "LambdaFunction::LambdaFunction.ReadFunction::FunctionHandler",
                 Code = Code.FromAsset(lambdaPath),
-                Timeout = Duration.Seconds(10),
-                MemorySize = 256,
                 Environment = new Dictionary<string, string>
                 {
                     { "SECRET_NAME", "test2/rds-credentials" }
                 }
             });
-            var api = new LambdaRestApi(this, "newapi", new LambdaRestApiProps
+
+            // 3) LAMBDA QUE ESCRIBE
+            var writeLambda = new Function(this, "WriteTableLambda", new FunctionProps
             {
-                Handler = lambdaFunction,
-                Proxy = false
+                Runtime = Runtime.DOTNET_8,
+                Handler = "LambdaFunction::LambdaFunction.WriteFunction::FunctionHandler",
+                Code = Code.FromAsset(lambdaPath),
+                Environment = new Dictionary<string, string>
+                {
+                    { "SECRET_NAME", "test2/rds-credentials" }
+                }
             });
-            var clientes = api.Root.AddResource("solicitudes-plantilla-nueva");
 
-            // Método POST
-            clientes.AddMethod("POST");
+            // 4) PERMISOS
+            secret.GrantRead(readLambda);
+            secret.GrantRead(writeLambda);
 
-            // 3. Permitir que la Lambda LEA el secreto
-            secret.GrantRead(lambdaFunction);
+            // 5) STEP FUNCTION TASKS
+            var readTask = new LambdaInvoke(this, "ReadFromDB", new LambdaInvokeProps
+            {
+                LambdaFunction = readLambda,
+                OutputPath = "$.Payload"
+            });
+
+            var writeTask = new LambdaInvoke(this, "WriteToDB", new LambdaInvokeProps
+            {
+                LambdaFunction = writeLambda,
+                Payload = TaskInput.FromObject(new Dictionary<string, object?>
+                {
+                    {
+                        "items", JsonPath.StringAt("$.items")
+                    }
+                })
+
+            });
+
+            
+            // 6) STATE MACHINE
+            var stateMachine = new StateMachine(this, "DbCopyStateMachine", new StateMachineProps
+            {
+                DefinitionBody = DefinitionBody.FromChainable(
+                    readTask.Next(writeTask)
+                )
+            });
+
         }
     }
 }

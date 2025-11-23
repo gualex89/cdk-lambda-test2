@@ -22,7 +22,7 @@ namespace NuevoApiProyecto
 
             var env = MakeEnv(account, region);
 
-            new apiStackDistinto(app, "apiStackDistinto2989", new StackProps
+            new lambdaConStepF(app, "lambdaConStepF1305", new StackProps
             {
                 Env = env,
                 Description = "API creada desde plantilla"
