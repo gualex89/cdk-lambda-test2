@@ -10,21 +10,22 @@ public class WriteFunction
 {
     public async Task<object> FunctionHandler(Dictionary<string, object> input, ILambdaContext context)
     {
-        // Log para debugging
-        context.Logger.Log("INPUT RAW → " + JsonSerializer.Serialize(input));
+        context.Logger.Log($"INPUT RAW: {JsonSerializer.Serialize(input)}");
 
-        // 1. Obtener lista de items directamente
-        var itemsJson = (JsonElement)input["items"];
-        var items = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(itemsJson.GetRawText())!;
+        // Parse payload correctamente
+        var payloadJson = JsonSerializer.Serialize(input);
+        var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(payloadJson)!;
 
-        // 2. Secret
+        var items = payload["items"].EnumerateArray().ToList();
+
+        // Obtener secretos
         string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
         string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
 
         var client = new AmazonSecretsManagerClient(Amazon.RegionEndpoint.GetBySystemName(region));
         var secretResponse = await client.GetSecretValueAsync(new GetSecretValueRequest { SecretId = secretName });
 
-        var secretDict = JsonSerializer.Deserialize<Dictionary<string, object>>(secretResponse.SecretString!)!;
+        var secretDict = JsonSerializer.Deserialize<Dictionary<string, string>>(secretResponse.SecretString!)!;
 
         string connectionString =
             $"Host={secretDict["host"]};" +
@@ -33,28 +34,48 @@ public class WriteFunction
             $"Password={secretDict["password"]};" +
             $"Database={secretDict["dbname"]};";
 
-        // 3. Insert
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
 
         foreach (var row in items)
         {
+            // Helpers robustos
+            int GetInt(JsonElement el) =>
+                el.ValueKind switch
+                {
+                    JsonValueKind.Number => el.GetInt32(),
+                    JsonValueKind.String => int.Parse(el.GetString()!),
+                    _ => throw new Exception($"Valor inválido para int: {el}")
+                };
+
+            string GetString(JsonElement el) =>
+                el.ValueKind switch
+                {
+                    JsonValueKind.String => el.GetString()!,
+                    JsonValueKind.Number => el.ToString(),
+                    _ => throw new Exception($"Valor inválido para string: {el}")
+                };
+
+            DateTime GetDate(JsonElement el) =>
+                DateTime.Parse(GetString(el));
+
             var cmd = new NpgsqlCommand(
                 @"INSERT INTO solicitudes_2
-                (nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion, monto_solicitado, observaciones)
-                VALUES (@c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9)",
-                conn
-            );
+                    (nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, 
+                     fecha_creacion, fecha_materializacion, monto_solicitado, observaciones)
+                  VALUES
+                    (@c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9)",
+                conn);
 
-            cmd.Parameters.AddWithValue("c1", row["nombre_solicitante"].GetString()!);
-            cmd.Parameters.AddWithValue("c2", row["tipo_solicitud"].GetInt32());
-            cmd.Parameters.AddWithValue("c3", row["descripcion"].GetString()!);
-            cmd.Parameters.AddWithValue("c4", row["estado"].GetString()!);
-            cmd.Parameters.AddWithValue("c5", row["prioridad"].GetInt32());
-            cmd.Parameters.AddWithValue("c6", row["fecha_creacion"].GetDateTime());
-            cmd.Parameters.AddWithValue("c7", row["fecha_materializacion"].GetDateTime());
-            cmd.Parameters.AddWithValue("c8", row["monto_solicitado"].GetInt32());
-            cmd.Parameters.AddWithValue("c9", row["observaciones"].GetString()!);
+            cmd.Parameters.AddWithValue("c1", GetString(row.GetProperty("nombre_solicitante")));
+            cmd.Parameters.AddWithValue("c2", GetInt(row.GetProperty("tipo_solicitud")));
+            cmd.Parameters.AddWithValue("c3", GetString(row.GetProperty("descripcion")));
+            cmd.Parameters.AddWithValue("c4", GetString(row.GetProperty("estado")));
+            cmd.Parameters.AddWithValue("c5", GetInt(row.GetProperty("prioridad")));
+            cmd.Parameters.AddWithValue("c6", GetDate(row.GetProperty("fecha_creacion")));
+            cmd.Parameters.AddWithValue("c7", GetDate(row.GetProperty("fecha_materializacion")));
+            cmd.Parameters.AddWithValue("c8", GetInt(row.GetProperty("monto_solicitado")));
+            cmd.Parameters.AddWithValue("c9", GetString(row.GetProperty("observaciones")));
 
             await cmd.ExecuteNonQueryAsync();
         }
