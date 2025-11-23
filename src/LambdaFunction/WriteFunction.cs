@@ -55,7 +55,7 @@ namespace LambdaFunction
                 await conn.OpenAsync();
 
                 string query = @"
-                    INSERT INTO solicitudes.solicitudes_2 
+                    INSERT INTO solicitudes_2
                     (id, nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion)
                     VALUES (@id, @nombre, @tipo, @descripcion, @estado, @prioridad, @creacion, @materializacion);
                 ";
