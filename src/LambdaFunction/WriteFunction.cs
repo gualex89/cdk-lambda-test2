@@ -4,7 +4,6 @@ using Amazon.SecretsManager.Model;
 using Npgsql;
 using System.Text.Json;
 
-[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
 
 namespace LambdaFunction
 {
