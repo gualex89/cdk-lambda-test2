@@ -4,18 +4,17 @@ using Amazon.SecretsManager.Model;
 using Npgsql;
 using System.Text.Json;
 
-
 namespace LambdaFunction;
 
 public class WriteFunction
 {
     public async Task<object> FunctionHandler(Dictionary<string, object> input, ILambdaContext context)
     {
-        // input YA ES JSON PARSEADO
-        var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(
-            input["items"].ToString()!
-        )!;
+        // 1. Extraer items correctamente del input
+        var jsonItems = (JsonElement)input["items"];
+        var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(jsonItems.GetRawText())!;
 
+        // 2. Obtener secretos
         string secretName = Environment.GetEnvironmentVariable("SECRET_NAME")!;
         string region = Environment.GetEnvironmentVariable("AWS_REGION")!;
 
@@ -31,6 +30,7 @@ public class WriteFunction
             $"Password={secretDict["password"]};" +
             $"Database={secretDict["dbname"]};";
 
+        // 3. Insertar filas
         await using (var conn = new NpgsqlConnection(connectionString))
         {
             await conn.OpenAsync();
@@ -38,10 +38,12 @@ public class WriteFunction
             foreach (var row in items)
             {
                 var cmd = new NpgsqlCommand(
-                    "INSERT INTO solicitudes_2(nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion, monto_solicitado, observaciones) VALUES (@c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9)", conn);
+                    @"INSERT INTO solicitudes_2
+                    (nombre_solicitante, tipo_solicitud, descripcion, estado, prioridad, fecha_creacion, fecha_materializacion, monto_solicitado, observaciones)
+                    VALUES (@c1, @c2, @c3, @c4, @c5, @c6, @c7, @c8, @c9)", conn);
 
                 cmd.Parameters.AddWithValue("c1", row["nombre_solicitante"]);
-                cmd.Parameters.AddWithValue("c2", row["tipo_solicitud"]);
+                cmd.Parameters.AddWithValue("c2", int.Parse(row["tipo_solicitud"].ToString()!));   // <-- AHORA SÍ ENTERO
                 cmd.Parameters.AddWithValue("c3", row["descripcion"]);
                 cmd.Parameters.AddWithValue("c4", row["estado"]);
                 cmd.Parameters.AddWithValue("c5", row["prioridad"]);
